@@ -37,3 +37,5 @@ function HelpIcon({ helpKey, label }) {
     </span>
   );
 }
+
+export default HelpIcon;

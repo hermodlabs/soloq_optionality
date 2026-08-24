@@ -43,3 +43,5 @@ function PaidHoverHost({ id, children, card, activePaidHoverId, setActivePaidHov
     </span>
   );
 }
+
+export default PaidHoverHost;

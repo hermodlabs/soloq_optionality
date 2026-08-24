@@ -1,11 +1,23 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  HERMOD_CHECKOUT_MODAL,
-  HERMOD_HELP,
-  HERMOD_PROVIDER_PAID_HOVER,
-  HERMOD_UI_CONFIG,
-} from "./config.jsx";
+import React, { useEffect, useMemo, useState } from "react";
+import { HERMOD_HELP } from "./config.jsx";
 import { FAMILIES, PHASES, REQUIREMENTS } from "./data.jsx";
+import { draftController } from "./domain/draftController.js";
+import {
+  buildChampionMap,
+  filterChampions as filterChampionList,
+  getAnalysisState as computeAnalysisState,
+  getCapabilityStrength,
+  getFutureIdsFor as computeFutureIdsFor,
+  getLensInfo as computeLensInfo,
+  getLensSpace,
+  getMetricCards as computeMetricCards,
+  getProvidersFor as computeProvidersFor,
+  getRequirementState as computeRequirementState,
+  getStatusClass,
+  getStrategyDiff as computeStrategyDiff,
+  getStrategyInfo as computeStrategyInfo,
+} from "./domain/strategyAnalyzer.js";
+import { paidFeatureController } from "./domain/paidFeatureController.js";
 import { useHermodStore } from "./store/useHermodStore.js";
 
 import HelpIcon from "./component/HelpIcon/HelpIcon.jsx";
@@ -14,7 +26,6 @@ import PaidHoverHost from "./component/PaidHoverHost/PaidHoverHost.jsx";
 import CheckoutModal from "./component/CheckoutModal/CheckoutModal.jsx";
 
 const ROLE_FILTERS = ["All", "Tank", "Fighter", "Assassin", "Mage", "Marksman", "Support"];
-
 
 function App() {
   const {
@@ -63,10 +74,7 @@ function App() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [checkoutContext, setCheckoutContext]);
 
-  const championMap = useMemo(
-    () => new Map(champions.map((champion) => [champion.id, champion])),
-    [champions]
-  );
+  const championMap = useMemo(() => buildChampionMap(champions), [champions]);
 
   const allStrategies = useMemo(
     () =>
@@ -76,7 +84,7 @@ function App() {
     []
   );
 
-  const phase = PHASES[phaseIndex] || null;
+  const phase = draftController.getCurrentPhase(phaseIndex);
   const selectedStrategy =
     allStrategies.find((strategy) => strategy.id === selectedStrategyId) || allStrategies[0];
 
@@ -91,370 +99,98 @@ function App() {
   );
 
   const capabilityStrength = (championId, requirementId) =>
-    championMap.get(championId)?.capabilities?.[requirementId] || 0;
+    getCapabilityStrength(championMap, championId, requirementId);
 
-  const getAnalysisState = (withPreview) => {
-    const state = {
-      blue: [...draft.blue],
-      red: [...draft.red],
-      blueBans: [...draft.blueBans],
-      redBans: [...draft.redBans],
-    };
+  const summarizeChampionContributions = (champion) => {
+    if (!champion?.capabilities) return [];
 
-    if (!withPreview || !preview || !phase) return state;
-
-    if (phase.type === "bans") {
-      const key = activeBanSide === "blue" ? "blueBans" : "redBans";
-      if (!state[key].includes(preview)) {
-        state[key].push(preview);
-      }
-    } else if (phase.type === "pick" && !phasePicks.includes(preview)) {
-      state[phase.side].push(preview);
-    }
-
-    return state;
+    return Object.entries(champion.capabilities)
+      .sort(([, left], [, right]) => right - left)
+      .slice(0, 3)
+      .map(([requirementId, value]) => ({
+        label: REQUIREMENTS[requirementId] || requirementId.replace(/_/g, " "),
+        value,
+      }));
   };
 
-  const teamIds = (side, state) => {
-    const ids = [...state[side]];
-    if (phase?.type === "pick" && phase.side === side) {
-      ids.push(...phasePicks);
-    }
-    return ids;
-  };
+  const getAnalysisState = (withPreview) =>
+    computeAnalysisState({
+      draft,
+      preview: withPreview ? preview : null,
+      phase,
+      phasePicks,
+      activeBanSide,
+    });
 
   const providersFor = (requirementId, side, state) =>
-    teamIds(side, state).filter(
-      (championId) => capabilityStrength(championId, requirementId) > 0
-    );
+    computeProvidersFor({ requirementId, side, state, phase, phasePicks, championMap });
 
-  const futureIdsFor = (requirementId, state) => {
-    const blocked = new Set([
-      ...state.blue,
-      ...state.red,
-      ...state.blueBans,
-      ...state.redBans,
-      ...phasePicks,
-    ]);
+  const futureIdsFor = (requirementId, state) =>
+    computeFutureIdsFor({ requirementId, state, phasePicks, champions, championMap });
 
-    return champions
-      .filter(
-        (champion) =>
-          !blocked.has(champion.id) && capabilityStrength(champion.id, requirementId) > 0
-      )
-      .map((champion) => champion.id);
-  };
+  const getStrategyInfo = (strategy, side, state) =>
+    computeStrategyInfo({ strategy, side, state, phase, phasePicks, champions, championMap });
 
-  const getStrategyInfo = (strategy, side, state) => {
-    const current = strategy.requirements.filter(
-      (requirementId) => providersFor(requirementId, side, state).length > 0
-    );
+  const getLensInfo = (strategy, side, state) =>
+    computeLensInfo({ strategy, side, state, lens, phase, phasePicks, champions, championMap });
 
-    const missing = strategy.requirements.filter(
-      (requirementId) => providersFor(requirementId, side, state).length === 0
-    );
+  const getStrategyDiff = (strategy) =>
+    computeStrategyDiff({
+      strategy,
+      analysisSide,
+      preview,
+      lens,
+      draft,
+      phase,
+      phasePicks,
+      activeBanSide,
+      champions,
+      championMap,
+    });
 
-    const support = Math.round(
-      strategy.requirements.reduce((sum, requirementId) => {
-        const maxStrength = providersFor(requirementId, side, state).reduce(
-          (max, championId) => Math.max(max, capabilityStrength(championId, requirementId)),
-          0
-        );
-        return sum + Math.min(4, maxStrength);
-      }, 0) /
-        (strategy.requirements.length * 4) *
-        100
-    );
+  const isUnavailable = (champion) =>
+    draftController.isChampionUnavailable({
+      championId: champion.id,
+      draft,
+      phase,
+      phasePicks,
+      activeBanSide,
+      usedSet,
+      bannedSet,
+    });
 
-    const redundant = strategy.requirements.filter(
-      (requirementId) => providersFor(requirementId, side, state).length >= 2
-    ).length;
-
-    const single = strategy.requirements.filter(
-      (requirementId) => providersFor(requirementId, side, state).length === 1
-    ).length;
-
-    const candidateBreadth = new Set(
-      missing.flatMap((requirementId) => futureIdsFor(requirementId, state))
-    ).size;
-
-    let option = "OPEN";
-
-    if (missing.length === 0) {
-      option = "ACTIVE";
-    } else if (
-      missing.some((requirementId) => futureIdsFor(requirementId, state).length === 0)
-    ) {
-      option = "CLOSED";
-    } else if (
-      missing.some((requirementId) => futureIdsFor(requirementId, state).length <= 2)
-    ) {
-      option = "CONSTRAINED";
-    } else if (current.length > 0) {
-      option = "EMERGING";
-    }
-
-    const realizability = Math.round(
-      support * 0.82 + (current.length / strategy.requirements.length) * 18
-    );
-
-    return {
-      current,
-      missing,
-      support,
-      redundant,
-      single,
-      candidateBreadth,
-      option,
-      realizability,
-    };
-  };
-
-  const getLensInfo = (strategy, side, state) => {
-    const info = getStrategyInfo(strategy, side, state);
-
-    if (lens === "objective") {
-      return {
-        main: `${info.current.length}/${strategy.requirements.length}`,
-        label: "requirements covered",
-        status:
-          info.current.length === strategy.requirements.length
-            ? "COVERED"
-            : info.current.length
-              ? "PARTIAL"
-              : "GAP",
-      };
-    }
-
-    if (lens === "realizability") {
-      return {
-        main: `${info.realizability}%`,
-        label: "illustrative execution fit",
-        status:
-          info.realizability >= 70 ? "STRONG" : info.realizability >= 40 ? "BURDENED" : "LOW",
-      };
-    }
-
-    if (lens === "robustness") {
-      return {
-        main: `${info.redundant}R · ${info.single}S`,
-        label: "redundant / single points",
-        status:
-          info.missing.length ? "EXPOSED" : info.redundant >= 2 ? "ROBUST" : "FRAGILE",
-      };
-    }
-
-    return {
-      main: info.option,
-      label: `${info.candidateBreadth} candidate breadth`,
-      status: info.option,
-    };
-  };
-
-  const statusClass = (status) => {
-    if (["COVERED", "STRONG", "ROBUST", "ACTIVE"].includes(status)) return "good";
-    if (["GAP", "LOW", "EXPOSED", "CLOSED"].includes(status)) return "bad";
-    if (["PARTIAL", "BURDENED", "FRAGILE", "CONSTRAINED"].includes(status)) return "warn";
-    return "";
-  };
-
-  const getStrategyDiff = (strategy) => {
-    if (!preview) {
-      return { text: "Click a champion to preview the diff.", className: "same" };
-    }
-
-    const before = getStrategyInfo(strategy, analysisSide, getAnalysisState(false));
-    const after = getStrategyInfo(strategy, analysisSide, getAnalysisState(true));
-
-    if (lens === "objective") {
-      if (before.current.length === after.current.length) {
-        return { text: "No coverage change", className: "same" };
-      }
-
-      return {
-        text: `${before.current.length}/${strategy.requirements.length} → ${after.current.length}/${strategy.requirements.length} covered`,
-        className: after.current.length > before.current.length ? "add" : "remove",
-      };
-    }
-
-    if (lens === "realizability") {
-      if (before.realizability === after.realizability) {
-        return { text: "No realizability change", className: "same" };
-      }
-
-      return {
-        text: `${before.realizability}% → ${after.realizability}% realizability`,
-        className: after.realizability > before.realizability ? "add" : "remove",
-      };
-    }
-
-    if (lens === "robustness") {
-      if (before.redundant === after.redundant && before.single === after.single) {
-        return { text: "No robustness change", className: "same" };
-      }
-
-      return {
-        text: `redundant ${before.redundant}→${after.redundant} · single ${before.single}→${after.single}`,
-        className: after.redundant > before.redundant ? "add" : "same",
-      };
-    }
-
-    if (before.option === after.option && before.candidateBreadth === after.candidateBreadth) {
-      return { text: "No optionality change", className: "same" };
-    }
-
-    return {
-      text: `${before.option} → ${after.option} · breadth ${before.candidateBreadth}→${after.candidateBreadth}`,
-      className: after.option === "CLOSED" ? "remove" : "add",
-    };
-  };
-
-  const isUnavailable = (champion) => {
-    if (!phase) return true;
-    if (phase.type === "bans") {
-      const currentBans = activeBanSide === "blue" ? draft.blueBans : draft.redBans;
-      return currentBans.length >= 5 || currentBans.includes(champion.id);
-    }
-    return usedSet.has(champion.id) || bannedSet.has(champion.id) || phasePicks.includes(champion.id);
-  };
-
-  const filteredChampions = champions.filter((champion) => {
-    const query = search.trim().toLowerCase();
-    const roleMatches = roleFilter === "All" || champion.tags.includes(roleFilter);
-    const searchMatches =
-      !query ||
-      champion.name.toLowerCase().includes(query) ||
-      champion.tags.join(" ").toLowerCase().includes(query);
-    return roleMatches && searchMatches;
-  });
-
-  const lensSpace = {
-    objective: ["Strategy Coverage Space", "How much of each named strategy is currently supported?", "strategy_coverage_space"],
-    realizability: ["Strategy Realizability Space", "How executable is the support that currently exists?", "strategy_realizability_space"],
-    robustness: ["Strategy Robustness Space", "Where does each strategy have redundancy, concentration, or gaps?", "strategy_robustness_space"],
-    optionality: ["Strategy Option Space", "Which strategic architectures remain open as the draft evolves?", "strategy_option_space"],
-  }[lens];
+  const filteredChampions = filterChampionList({ champions, search, roleFilter });
+  const lensSpace = getLensSpace(lens);
 
   const beforeState = getAnalysisState(false);
   const afterState = getAnalysisState(true);
-
   const selectedLensInfo = getLensInfo(selectedStrategy, analysisSide, beforeState);
 
-  const metricCards = (() => {
-    const before = allStrategies.map((strategy) => getStrategyInfo(strategy, analysisSide, beforeState));
-    const after = allStrategies.map((strategy) => getStrategyInfo(strategy, analysisSide, afterState));
+  const metricCards = computeMetricCards({
+    allStrategies,
+    lens,
+    analysisSide,
+    beforeState,
+    afterState,
+    phase,
+    phasePicks,
+    champions,
+    championMap,
+  });
 
-    if (lens === "objective") {
-      const average = (items) =>
-        Math.round(
-          items.reduce(
-            (sum, item, index) => sum + item.current.length / allStrategies[index].requirements.length,
-            0
-          ) /
-            allStrategies.length *
-            100
-        );
+  const requirementState = (requirementId, state) =>
+    computeRequirementState({
+      requirementId,
+      state,
+      analysisSide,
+      lens,
+      phase,
+      phasePicks,
+      champions,
+      championMap,
+    });
 
-      return [
-        ["Average coverage", `${average(before)}%`, `${average(after)}%`, "average_coverage"],
-        ["Covered", before.filter((item, index) => item.current.length === allStrategies[index].requirements.length).length, after.filter((item, index) => item.current.length === allStrategies[index].requirements.length).length, "covered"],
-        ["Partial", before.filter((item, index) => item.current.length > 0 && item.current.length < allStrategies[index].requirements.length).length, after.filter((item, index) => item.current.length > 0 && item.current.length < allStrategies[index].requirements.length).length, "partial"],
-        ["Gaps", before.filter((item) => item.current.length === 0).length, after.filter((item) => item.current.length === 0).length, "gaps"],
-      ];
-    }
-
-    if (lens === "realizability") {
-      const average = (items) =>
-        Math.round(items.reduce((sum, item) => sum + item.realizability, 0) / items.length);
-
-      return [
-        ["Average fit", `${average(before)}%`, `${average(after)}%`, "average_fit"],
-        ["Strong", before.filter((item) => item.realizability >= 70).length, after.filter((item) => item.realizability >= 70).length, "strong"],
-        ["Burdened", before.filter((item) => item.realizability >= 40 && item.realizability < 70).length, after.filter((item) => item.realizability >= 40 && item.realizability < 70).length, "burdened"],
-        ["Low", before.filter((item) => item.realizability < 40).length, after.filter((item) => item.realizability < 40).length, "low"],
-      ];
-    }
-
-    if (lens === "robustness") {
-      return [
-        ["Redundant", before.reduce((sum, item) => sum + item.redundant, 0), after.reduce((sum, item) => sum + item.redundant, 0), "redundant"],
-        ["Single points", before.reduce((sum, item) => sum + item.single, 0), after.reduce((sum, item) => sum + item.single, 0), "single_points"],
-        ["Exposed", before.filter((item) => item.missing.length > 0).length, after.filter((item) => item.missing.length > 0).length, "exposed"],
-        ["Complete", before.filter((item) => item.missing.length === 0).length, after.filter((item) => item.missing.length === 0).length, "complete"],
-      ];
-    }
-
-    return [
-      ["Open / emerging", before.filter((item) => ["OPEN", "EMERGING"].includes(item.option)).length, after.filter((item) => ["OPEN", "EMERGING"].includes(item.option)).length, "open_emerging"],
-      ["Active", before.filter((item) => item.option === "ACTIVE").length, after.filter((item) => item.option === "ACTIVE").length, "active"],
-      ["Constrained", before.filter((item) => item.option === "CONSTRAINED").length, after.filter((item) => item.option === "CONSTRAINED").length, "constrained"],
-      ["Closed", before.filter((item) => item.option === "CLOSED").length, after.filter((item) => item.option === "CLOSED").length, "closed"],
-    ];
-  })();
-
-  const requirementState = (requirementId, state) => {
-    const currentProviders = providersFor(requirementId, analysisSide, state);
-
-    if (lens === "objective") {
-      return {
-        label: currentProviders.length ? "COVERED" : "GAP",
-        className: currentProviders.length ? "good" : "bad",
-        note: currentProviders.length
-          ? `${currentProviders.length} current provider${currentProviders.length === 1 ? "" : "s"}`
-          : "No current provider",
-      };
-    }
-
-    if (lens === "realizability") {
-      const strength = currentProviders.reduce(
-        (max, championId) => Math.max(max, capabilityStrength(championId, requirementId)),
-        0
-      );
-      const value = Math.round((strength / 4) * 85 + (currentProviders.length ? 15 : 0));
-
-      return {
-        label: value >= 75 ? "STRONG" : value ? "BURDENED" : "UNREALIZED",
-        className: value >= 75 ? "good" : value ? "warn" : "bad",
-        note: value ? `${value}% illustrative execution fit` : "No current provider",
-      };
-    }
-
-    if (lens === "robustness") {
-      if (currentProviders.length >= 2) {
-        return {
-          label: "REDUNDANT",
-          className: "good",
-          note: `${currentProviders.length} current providers`,
-        };
-      }
-      if (currentProviders.length === 1) {
-        return {
-          label: "SINGLE POINT",
-          className: "warn",
-          note: "One current provider",
-        };
-      }
-      return { label: "GAP", className: "bad", note: "No current provider" };
-    }
-
-    const futureCount = futureIdsFor(requirementId, state).length;
-
-    if (currentProviders.length >= 2) {
-      return { label: "REDUNDANT", className: "good", note: "Multiple current providers" };
-    }
-
-    if (currentProviders.length === 1) {
-      return {
-        label: futureCount ? "ANCHORED" : "LOCKED",
-        className: futureCount ? "" : "warn",
-        note: futureCount ? "Future alternatives still exist" : "No future alternative",
-      };
-    }
-
-    return futureCount
-      ? { label: "OPEN", className: "good", note: "Requirement remains open" }
-      : { label: "CLOSED", className: "bad", note: "No remaining route" };
-  };
+  const [activeRequirementDetail, setActiveRequirementDetail] = useState(null);
 
   const renderPickSlots = (side) => {
     const locked = draft[side];
@@ -481,7 +217,10 @@ function App() {
               <PaidHoverCard
                 kind={kind}
                 championName={champion?.name || championId}
-                onOpenCheckout={setCheckoutContext}
+                contributions={summarizeChampionContributions(champion)}
+                onOpenCheckout={(payload) =>
+                  setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
+                }
               />
             }
           >
@@ -507,7 +246,10 @@ function App() {
               <PaidHoverCard
                 kind="previewPick"
                 championName={champion?.name || previewForSide}
-                onOpenCheckout={setCheckoutContext}
+                contributions={summarizeChampionContributions(champion)}
+                onOpenCheckout={(payload) =>
+                  setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
+                }
               />
             }
           >
@@ -549,24 +291,15 @@ function App() {
               <PaidHoverCard
                 kind="ban"
                 championName={champion?.name || championId}
-                onOpenCheckout={setCheckoutContext}
+                contributions={summarizeChampionContributions(champion)}
+                onOpenCheckout={(payload) =>
+                  setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
+                }
               />
             }
           >
             <img src={champion?.image} alt="" />
             <strong>{champion?.name || championId}</strong>
-            <button
-              type="button"
-              className="remove"
-              aria-label={`Remove ${champion?.name || championId} ban`}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                removeBan(side, index);
-              }}
-            >
-              ×
-            </button>
           </PaidHoverHost>
         );
       }
@@ -584,7 +317,10 @@ function App() {
               <PaidHoverCard
                 kind="previewBan"
                 championName={champion?.name || previewForSide}
-                onOpenCheckout={setCheckoutContext}
+                contributions={summarizeChampionContributions(champion)}
+                onOpenCheckout={(payload) =>
+                  setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
+                }
               />
             }
           >
@@ -601,8 +337,10 @@ function App() {
   const previewChampion = preview ? championMap.get(preview) : null;
   const centerPreviewKind = phase?.type === "bans" ? "previewBan" : "previewPick";
 
+  const analysisThemeClass = analysisSide === "red" ? "is-red-team" : "is-blue-team";
+
   return (
-    <div className="shell">
+    <div className={`shell ${analysisThemeClass}`}>
       <header className="topbar">
         <div className="copy">
           <div className="eyebrow">Hermod · SoloQ Optionality Lab</div>
@@ -657,7 +395,10 @@ function App() {
                   <PaidHoverCard
                     kind={centerPreviewKind}
                     championName={previewChampion.name}
-                    onOpenCheckout={setCheckoutContext}
+                    contributions={summarizeChampionContributions(previewChampion)}
+                    onOpenCheckout={(payload) =>
+                      setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
+                    }
                   />
                 }
               >
@@ -731,16 +472,84 @@ function App() {
           </div>
         </div>
 
-        <div className="timeline">
-          {PHASES.map((item, index) => (
-            <span
-              key={item.id}
-              className={`phase-chip ${index === phaseIndex ? "active" : index < phaseIndex ? "done" : ""}`}
+      </section>
+
+      <section className="panel strategic-lens-panel">
+        <div className="lens-head">
+          <div>
+            <div className="eyebrow term-with-info">
+              <HelpIcon helpKey="strategic_lens" label="Strategic Lens" />
+              Strategic lens
+            </div>
+            <h2>Read the same draft through four different projections</h2>
+          </div>
+
+          <div className="side-tabs">
+            <button
+              type="button"
+              className={`blue ${analysisSide === "blue" ? "active" : ""}`}
+              onClick={() => setAnalysisSide("blue")}
             >
-              {item.label}
-            </span>
+              Analyze Blue
+            </button>
+            <button
+              type="button"
+              className={`red ${analysisSide === "red" ? "active" : ""}`}
+              onClick={() => setAnalysisSide("red")}
+            >
+              Analyze Red
+            </button>
+          </div>
+        </div>
+
+        <div className="lenses">
+          {[
+            ["objective", "Objective Coverage", "What strategic requirements are currently covered?", "objective_coverage"],
+            ["realizability", "Realizability", "How executable are the covered requirements?", "realizability"],
+            ["robustness", "Robustness", "Where is support redundant or concentrated?", "robustness"],
+            ["optionality", "Optionality", "What named strategies and requirements remain open?", "optionality"],
+          ].map(([id, title, description, helpKey]) => (
+            <button
+              key={id}
+              type="button"
+              className={`lens ${lens === id ? "active" : ""}`}
+              onClick={() => setLens(id)}
+            >
+              <strong className="term-with-info">
+                <HelpIcon helpKey={helpKey} label={title} />
+                {title}
+              </strong>
+              <span>{description}</span>
+            </button>
           ))}
         </div>
+
+        <div className="gitbar">
+          {metricCards.map(([label, before, after, helpKey]) => {
+            const same = String(before) === String(after);
+            const beforeNumber = parseFloat(before);
+            const afterNumber = parseFloat(after);
+            const diffClass = same
+              ? "same"
+              : Number.isFinite(beforeNumber) && Number.isFinite(afterNumber) && afterNumber > beforeNumber
+                ? "add"
+                : "remove";
+
+            return (
+              <div key={label} className="gitmetric">
+                <div className="k">
+                  <HelpIcon helpKey={helpKey} label={label} />
+                  {label}
+                </div>
+                <div className="v">{before}</div>
+                <div className={`diff ${diffClass}`}>
+                  {preview ? `± ${before} → ${after}` : "current state"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
       </section>
 
       <div className="workspace">
@@ -826,125 +635,6 @@ function App() {
 
             <div className="roster-note">{rosterNote}</div>
 
-            <div className="selection-bar">
-              <div className="selection-summary">
-                {previewChampion ? (
-                  <>
-                    <img src={previewChampion.image} alt="" />
-                    <div>
-                      <strong>{previewChampion.name}</strong>
-                      <span>
-                        Preview only · inspect the strategic diff, then use Select on the champion portrait to commit it
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <span>No champion previewed yet.</span>
-                )}
-              </div>
-
-              <div className="btn-row">
-                <button type="button" className="btn" onClick={() => setPreview(null)}>
-                  Clear preview
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="lens-head">
-              <div>
-                <div className="eyebrow term-with-info">
-                  <HelpIcon helpKey="strategic_lens" label="Strategic Lens" />
-                  Strategic lens
-                </div>
-                <h2>Read the same draft through four different projections</h2>
-              </div>
-
-              <div className="side-tabs">
-                <button
-                  type="button"
-                  className={`blue ${analysisSide === "blue" ? "active" : ""}`}
-                  onClick={() => setAnalysisSide("blue")}
-                >
-                  Analyze Blue
-                </button>
-                <button
-                  type="button"
-                  className={`red ${analysisSide === "red" ? "active" : ""}`}
-                  onClick={() => setAnalysisSide("red")}
-                >
-                  Analyze Red
-                </button>
-              </div>
-            </div>
-
-            <div className="lenses">
-              {[
-                ["objective", "Objective Coverage", "What strategic requirements are currently covered?", "objective_coverage"],
-                ["realizability", "Realizability", "How executable are the covered requirements?", "realizability"],
-                ["robustness", "Robustness", "Where is support redundant or concentrated?", "robustness"],
-                ["optionality", "Optionality", "What named strategies and requirements remain open?", "optionality"],
-              ].map(([id, title, description, helpKey]) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`lens ${lens === id ? "active" : ""}`}
-                  onClick={() => setLens(id)}
-                >
-                  <strong className="term-with-info">
-                    <HelpIcon helpKey={helpKey} label={title} />
-                    {title}
-                  </strong>
-                  <span>{description}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="gitbar">
-              {metricCards.map(([label, before, after, helpKey]) => {
-                const same = String(before) === String(after);
-                const beforeNumber = parseFloat(before);
-                const afterNumber = parseFloat(after);
-                const diffClass = same
-                  ? "same"
-                  : Number.isFinite(beforeNumber) && Number.isFinite(afterNumber) && afterNumber > beforeNumber
-                    ? "add"
-                    : "remove";
-
-                return (
-                  <div key={label} className="gitmetric">
-                    <div className="k">
-                      <HelpIcon helpKey={helpKey} label={label} />
-                      {label}
-                    </div>
-                    <div className="v">{before}</div>
-                    <div className={`diff ${diffClass}`}>
-                      {preview ? `± ${before} → ${after}` : "current state"}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="breadcrumb">
-              <b>Strategic Lens</b>
-              <span>›</span>
-              <b>
-                {{
-                  objective: "Objective Coverage",
-                  realizability: "Realizability",
-                  robustness: "Robustness",
-                  optionality: "Optionality",
-                }[lens]}
-              </b>
-              <span>›</span>
-              <span>{lensSpace[0]}</span>
-              <span>›</span>
-              <span>{selectedStrategy.family}</span>
-              <span>›</span>
-              <b>{selectedStrategy.name}</b>
-            </div>
           </section>
 
           <section className="panel">
@@ -992,17 +682,16 @@ function App() {
                         >
                           <div className="strategy-top">
                             <div className="strategy-name">
-                              <HelpIcon helpKey={strategy.id} label={strategy.name} />
                               {strategy.name}
                             </div>
-                            <span className={`status ${statusClass(lensInfo.status)}`}>
+                            <span className={`status ${getStatusClass(lensInfo.status)}`}>
                               {lensInfo.status}
                             </span>
                           </div>
 
                           <div className="strategy-stat">
-                            <span>{lensInfo.label}</span>
                             <b>{lensInfo.main}</b>
+                            <span className="strategy-description">{strategy.description}</span>
                           </div>
 
                           <div className={`strategy-diff diff ${diff.className}`}>{diff.text}</div>
@@ -1031,7 +720,7 @@ function App() {
                 <p className="sub">{selectedStrategy.description}</p>
               </div>
 
-              <span className={`status ${statusClass(selectedLensInfo.status)}`}>
+              <span className={`status ${getStatusClass(selectedLensInfo.status)}`}>
                 {selectedLensInfo.status}
               </span>
             </div>
@@ -1061,14 +750,39 @@ function App() {
                   }
                 }
 
+                const requirementDetail = HERMOD_HELP[requirementId] || {};
+
                 return (
-                  <div key={requirementId} className="req">
+                  <div
+                    key={requirementId}
+                    className="req"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setActiveRequirementDetail({
+                      title: REQUIREMENTS[requirementId],
+                      strategyName: selectedStrategy.name,
+                      body: requirementDetail.description || "This requirement contributes to the current named strategy.",
+                      status: state.label,
+                    })}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setActiveRequirementDetail({
+                          title: REQUIREMENTS[requirementId],
+                          strategyName: selectedStrategy.name,
+                          body: requirementDetail.description || "This requirement contributes to the current named strategy.",
+                          status: state.label,
+                        });
+                      }
+                    }}
+                  >
                     <div className="req-top">
-                      <div className="req-name">
-                        <HelpIcon helpKey={requirementId} label={REQUIREMENTS[requirementId]} />
-                        {REQUIREMENTS[requirementId]}
-                      </div>
+                      <div className="req-name">{REQUIREMENTS[requirementId]}</div>
                       <span className={`status ${state.className}`}>{state.label}</span>
+                    </div>
+
+                    <div className="req-description">
+                      {requirementDetail.description || "This requirement contributes to the current named strategy."}
                     </div>
 
                     <div className="providers">
@@ -1086,7 +800,11 @@ function App() {
                                   kind="current"
                                   championName={champion?.name || championId}
                                   strategyName={selectedStrategy.name}
-                                  onOpenCheckout={setCheckoutContext}
+                                  onOpenCheckout={(payload) =>
+                                    setCheckoutContext(
+                                      paidFeatureController.createCheckoutContext(payload)
+                                    )
+                                  }
                                 />
                               }
                             >
@@ -1114,7 +832,11 @@ function App() {
                                 kind="preview"
                                 championName={champion?.name || championId}
                                 strategyName={selectedStrategy.name}
-                                onOpenCheckout={setCheckoutContext}
+                                onOpenCheckout={(payload) =>
+                                  setCheckoutContext(
+                                    paidFeatureController.createCheckoutContext(payload)
+                                  )
+                                }
                               />
                             }
                           >
@@ -1139,6 +861,40 @@ function App() {
       <div className="footer">
         Hermod prototype. Strategic mappings are illustrative for UI experimentation. Hermod is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing League of Legends. Riot Games and League of Legends are trademarks or registered trademarks of Riot Games, Inc.
       </div>
+
+      {activeRequirementDetail && (
+        <div className="strategy-lightbox" onClick={() => setActiveRequirementDetail(null)}>
+          <div
+            className="strategy-lightbox-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="strategy-lightbox-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="strategy-lightbox-head">
+              <div>
+                <div className="eyebrow">{activeRequirementDetail.strategyName}</div>
+                <h3 id="strategy-lightbox-title">{activeRequirementDetail.title}</h3>
+              </div>
+              <button
+                type="button"
+                className="checkout-close"
+                onClick={() => setActiveRequirementDetail(null)}
+                aria-label="Close requirement detail"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="strategy-lightbox-body">{activeRequirementDetail.body}</p>
+
+            <div className="strategy-lightbox-meta">
+              <span>Current status</span>
+              <strong>{activeRequirementDetail.status}</strong>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CheckoutModal context={checkoutContext} onClose={() => setCheckoutContext(null)} />
     </div>

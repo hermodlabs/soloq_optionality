@@ -1,7 +1,7 @@
 import React from "react";
 import { HERMOD_PROVIDER_PAID_HOVER } from "../../config.jsx";
 
-function PaidHoverCard({ kind, championName, strategyName = "", onOpenCheckout }) {
+function PaidHoverCard({ kind, championName, strategyName = "", contributions = [], onOpenCheckout }) {
   const contentByKind = {
     current: HERMOD_PROVIDER_PAID_HOVER.currentProvider,
     preview: HERMOD_PROVIDER_PAID_HOVER.previewProvider,
@@ -12,12 +12,27 @@ function PaidHoverCard({ kind, championName, strategyName = "", onOpenCheckout }
   };
 
   const content = contentByKind[kind] || HERMOD_PROVIDER_PAID_HOVER.pickArea;
+  const visibleContributions = contributions.length ? contributions.slice(0, 3) : [];
 
   return (
     <span className="paid-tooltip-card">
       <span className="paid-feature-badge">{HERMOD_PROVIDER_PAID_HOVER.badgeText}</span>
       <span className="paid-feature-title">{content.title}</span>
       <span className="paid-feature-copy">{content.text}</span>
+
+      {visibleContributions.length > 0 && (
+        <span className="paid-feature-list">
+          <span className="paid-feature-list-label">Key contributions</span>
+          <span className="paid-feature-items">
+            {visibleContributions.map(({ label, value }) => (
+              <span key={label} className="paid-feature-item">
+                <span>{label}</span>
+                <em>{typeof value === "number" ? `${value}/4` : value}</em>
+              </span>
+            ))}
+          </span>
+        </span>
+      )}
 
       <button
         type="button"
@@ -33,3 +48,5 @@ function PaidHoverCard({ kind, championName, strategyName = "", onOpenCheckout }
     </span>
   );
 }
+
+export default PaidHoverCard;

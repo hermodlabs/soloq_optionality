@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { HERMOD_CHECKOUT_MODAL } from "../../config.jsx";
+import { paidFeatureController } from "../../domain/paidFeatureController.js";
 
 function CheckoutModal({ context, onClose }) {
   const [message, setMessage] = useState("");
@@ -57,17 +58,9 @@ function CheckoutModal({ context, onClose }) {
           onSubmit={(event) => {
             event.preventDefault();
 
-            const form = new FormData(event.currentTarget);
-            const number = String(form.get("cardNumber") || "").replace(/\D/g, "");
-            const expiry = String(form.get("expiry") || "").trim();
-            const cvc = String(form.get("cvc") || "").replace(/\D/g, "");
-
-            if (
-              number.length < 12 ||
-              !/^\d{1,2}\s*\/\s*\d{2}$/.test(expiry) ||
-              cvc.length < 3
-            ) {
-              setMessage("Please enter plausible demo card details.");
+            const validation = paidFeatureController.validateDemoCard(new FormData(event.currentTarget));
+            if (!validation.isValid) {
+              setMessage(validation.message);
               return;
             }
 
@@ -140,3 +133,5 @@ function CheckoutModal({ context, onClose }) {
     </div>
   );
 }
+
+export default CheckoutModal;

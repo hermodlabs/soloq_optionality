@@ -57,7 +57,7 @@ export const HERMOD_PROVIDER_PAID_HOVER = {
     text: "This paid analysis will explain which strategic capabilities and future options would be reduced if you commit the current preview.",
   },
 
-  buttonText: "View paid analysis",
+  buttonText: "Full analysis",
 };
 
 export const HERMOD_HELP = {
