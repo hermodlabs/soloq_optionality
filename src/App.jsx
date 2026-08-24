@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { HERMOD_HELP } from "./config.jsx";
+import { CHAMPION_CAPABILITY_GUIDANCE, HERMOD_HELP } from "./config.jsx";
 import { FAMILIES, PHASES, REQUIREMENTS } from "./data.jsx";
 import { draftController } from "./domain/draftController.js";
 import {
@@ -107,10 +107,43 @@ function App() {
     return Object.entries(champion.capabilities)
       .sort(([, left], [, right]) => right - left)
       .slice(0, 3)
-      .map(([requirementId, value]) => ({
-        label: REQUIREMENTS[requirementId] || requirementId.replace(/_/g, " "),
-        value,
-      }));
+      .map(([requirementId, value]) => {
+        const capabilityGuide = CHAMPION_CAPABILITY_GUIDANCE[requirementId] || {};
+        return {
+          label: REQUIREMENTS[requirementId] || requirementId.replace(/_/g, " "),
+          value,
+          summary: capabilityGuide.summary || "This capability contributes to a meaningful strategic pattern.",
+          explanation: capabilityGuide.explanation || "The champion’s toolkit supports this requirement through repeated mechanical and tactical patterns seen in play.",
+          provenance: capabilityGuide.provenance || [],
+        };
+      });
+  };
+
+  const summarizeChampionBanImpact = (champion) => {
+    if (!champion?.capabilities) return [];
+
+    return Object.entries(champion.capabilities)
+      .sort(([, left], [, right]) => right - left)
+      .slice(0, 3)
+      .map(([requirementId, value]) => {
+        const requirementLabel = REQUIREMENTS[requirementId] || requirementId.replace(/_/g, " ");
+        const capabilityGuide = CHAMPION_CAPABILITY_GUIDANCE[requirementId] || {};
+        return {
+          label: requirementLabel,
+          value,
+          summary: `This ban removes a key route to ${requirementLabel.toLowerCase()} from the draft.`,
+          explanation: capabilityGuide.explanation
+            ? `This ban matters because it strips away the champion’s contribution to ${requirementLabel.toLowerCase()}, forcing the team to rely on weaker or slower alternatives for this requirement.`
+            : `Banning this champion narrows the team’s ability to satisfy ${requirementLabel.toLowerCase()} and weakens that strategic path.`,
+          provenance: capabilityGuide.provenance || [],
+        };
+      });
+  };
+
+  const summarizeChampionAnalysis = (champion, kind) => {
+    if (!champion) return [];
+    const isBanAnalysis = kind === "ban" || kind === "previewBan";
+    return isBanAnalysis ? summarizeChampionBanImpact(champion) : summarizeChampionContributions(champion);
   };
 
   const getAnalysisState = (withPreview) =>
@@ -191,6 +224,20 @@ function App() {
     });
 
   const [activeRequirementDetail, setActiveRequirementDetail] = useState(null);
+  const [activeStrategyDetail, setActiveStrategyDetail] = useState(null);
+  const [activeChampionAnalysis, setActiveChampionAnalysis] = useState(null);
+
+  const selectedStrategyEntry = HERMOD_HELP[selectedStrategy.id] || {};
+
+  const openChampionAnalysis = ({ champion, kind, strategyName = "" }) => {
+    if (!champion) return;
+    setActiveChampionAnalysis({
+      championName: champion.name,
+      strategyName,
+      analysisType: kind,
+      contributions: summarizeChampionAnalysis(champion, kind),
+    });
+  };
 
   const renderPickSlots = (side) => {
     const locked = draft[side];
@@ -213,14 +260,13 @@ function App() {
             className={`pick-slot ${isStaged ? "preview" : ""}`}
             activePaidHoverId={activePaidHoverId}
             setActivePaidHoverId={setActivePaidHoverId}
+            onClickOpen={() => openChampionAnalysis({ champion, kind })}
             card={
               <PaidHoverCard
                 kind={kind}
                 championName={champion?.name || championId}
-                contributions={summarizeChampionContributions(champion)}
-                onOpenCheckout={(payload) =>
-                  setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
-                }
+                contributions={summarizeChampionAnalysis(champion, kind)}
+                onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: kind })}
               />
             }
           >
@@ -242,14 +288,13 @@ function App() {
             className="pick-slot preview"
             activePaidHoverId={activePaidHoverId}
             setActivePaidHoverId={setActivePaidHoverId}
+            onClickOpen={() => openChampionAnalysis({ champion, kind: "previewPick" })}
             card={
               <PaidHoverCard
                 kind="previewPick"
                 championName={champion?.name || previewForSide}
-                contributions={summarizeChampionContributions(champion)}
-                onOpenCheckout={(payload) =>
-                  setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
-                }
+                contributions={summarizeChampionAnalysis(champion, "previewPick")}
+                onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: "previewPick" })}
               />
             }
           >
@@ -287,14 +332,13 @@ function App() {
             className="ban-slot"
             activePaidHoverId={activePaidHoverId}
             setActivePaidHoverId={setActivePaidHoverId}
+            onClickOpen={() => openChampionAnalysis({ champion, kind: "ban" })}
             card={
               <PaidHoverCard
                 kind="ban"
                 championName={champion?.name || championId}
-                contributions={summarizeChampionContributions(champion)}
-                onOpenCheckout={(payload) =>
-                  setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
-                }
+                contributions={summarizeChampionAnalysis(champion, "ban")}
+                onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: "ban" })}
               />
             }
           >
@@ -313,14 +357,13 @@ function App() {
             className="ban-slot preview"
             activePaidHoverId={activePaidHoverId}
             setActivePaidHoverId={setActivePaidHoverId}
+            onClickOpen={() => openChampionAnalysis({ champion, kind: "previewBan" })}
             card={
               <PaidHoverCard
                 kind="previewBan"
                 championName={champion?.name || previewForSide}
-                contributions={summarizeChampionContributions(champion)}
-                onOpenCheckout={(payload) =>
-                  setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
-                }
+                contributions={summarizeChampionAnalysis(champion, "previewBan")}
+                onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: "previewBan" })}
               />
             }
           >
@@ -336,6 +379,12 @@ function App() {
 
   const previewChampion = preview ? championMap.get(preview) : null;
   const centerPreviewKind = phase?.type === "bans" ? "previewBan" : "previewPick";
+
+  const getRequirementLightboxBody = (requirementId, strategyName, requirementDetail) => {
+    const title = REQUIREMENTS[requirementId] || requirementId;
+    const summary = requirementDetail.description || "This requirement contributes to the current named strategy.";
+    return `${title} is a core capability behind ${strategyName}. In plain terms, it helps the team ${summary.toLowerCase()}`;
+  };
 
   const analysisThemeClass = analysisSide === "red" ? "is-red-team" : "is-blue-team";
 
@@ -395,10 +444,8 @@ function App() {
                   <PaidHoverCard
                     kind={centerPreviewKind}
                     championName={previewChampion.name}
-                    contributions={summarizeChampionContributions(previewChampion)}
-                    onOpenCheckout={(payload) =>
-                      setCheckoutContext(paidFeatureController.createCheckoutContext(payload))
-                    }
+                    contributions={summarizeChampionAnalysis(previewChampion, centerPreviewKind)}
+                    onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: centerPreviewKind })}
                   />
                 }
               >
@@ -710,11 +757,21 @@ function App() {
             <div className="detail-head">
               <div>
                 <div className="eyebrow term-with-info">
-                  <HelpIcon helpKey="selected_named_strategy" label="Selected Named Strategy" />
-                  Selected named strategy
+                  <HelpIcon helpKey="selected_named_strategy" label="Strategy requirements" />
+                  Strategy requirements
                 </div>
-                <h2 className="term-with-info">
-                  <HelpIcon helpKey={selectedStrategy.id} label={selectedStrategy.name} />
+                <h2
+                  className="strategy-detail-trigger"
+                  onClick={() => setActiveStrategyDetail(selectedStrategy.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setActiveStrategyDetail(selectedStrategy.id);
+                    }
+                  }}
+                >
                   {selectedStrategy.name}
                 </h2>
                 <p className="sub">{selectedStrategy.description}</p>
@@ -761,7 +818,9 @@ function App() {
                     onClick={() => setActiveRequirementDetail({
                       title: REQUIREMENTS[requirementId],
                       strategyName: selectedStrategy.name,
-                      body: requirementDetail.description || "This requirement contributes to the current named strategy.",
+                      body: getRequirementLightboxBody(requirementId, selectedStrategy.name, requirementDetail),
+                      explanation: requirementDetail.explanation || "This requirement contributes to the current named strategy.",
+                      provenance: requirementDetail.provenance || [],
                       status: state.label,
                     })}
                     onKeyDown={(event) => {
@@ -770,7 +829,9 @@ function App() {
                         setActiveRequirementDetail({
                           title: REQUIREMENTS[requirementId],
                           strategyName: selectedStrategy.name,
-                          body: requirementDetail.description || "This requirement contributes to the current named strategy.",
+                          body: getRequirementLightboxBody(requirementId, selectedStrategy.name, requirementDetail),
+                          explanation: requirementDetail.explanation || "This requirement contributes to the current named strategy.",
+                          provenance: requirementDetail.provenance || [],
                           status: state.label,
                         });
                       }
@@ -800,11 +861,7 @@ function App() {
                                   kind="current"
                                   championName={champion?.name || championId}
                                   strategyName={selectedStrategy.name}
-                                  onOpenCheckout={(payload) =>
-                                    setCheckoutContext(
-                                      paidFeatureController.createCheckoutContext(payload)
-                                    )
-                                  }
+                                  onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: "current" })}
                                 />
                               }
                             >
@@ -832,11 +889,7 @@ function App() {
                                 kind="preview"
                                 championName={champion?.name || championId}
                                 strategyName={selectedStrategy.name}
-                                onOpenCheckout={(payload) =>
-                                  setCheckoutContext(
-                                    paidFeatureController.createCheckoutContext(payload)
-                                  )
-                                }
+                                onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: "preview" })}
                               />
                             }
                           >
@@ -888,9 +941,130 @@ function App() {
 
             <p className="strategy-lightbox-body">{activeRequirementDetail.body}</p>
 
+            <div className="strategy-lightbox-section">
+              <span className="strategy-lightbox-label">Purpose-first rationale</span>
+              <p>{activeRequirementDetail.explanation}</p>
+            </div>
+
+            {activeRequirementDetail.provenance?.length > 0 && (
+              <div className="strategy-lightbox-section">
+                <span className="strategy-lightbox-label">Reddit provenance</span>
+                <ul className="strategy-lightbox-list">
+                  {activeRequirementDetail.provenance.map((reference) => (
+                    <li key={`${reference.label}-${reference.url}`}>
+                      <a href={reference.url} target="_blank" rel="noreferrer noopener">{reference.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="strategy-lightbox-meta">
               <span>Current status</span>
               <strong>{activeRequirementDetail.status}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeStrategyDetail && (
+        <div className="strategy-lightbox" onClick={() => setActiveStrategyDetail(null)}>
+          <div
+            className="strategy-lightbox-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="strategy-detail-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="strategy-lightbox-head">
+              <div>
+                <div className="eyebrow">Named strategy</div>
+                <h3 id="strategy-detail-title">{selectedStrategy.name}</h3>
+              </div>
+              <button
+                type="button"
+                className="checkout-close"
+                onClick={() => setActiveStrategyDetail(null)}
+                aria-label="Close strategy detail"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="strategy-lightbox-body">{selectedStrategy.description}</p>
+
+            <div className="strategy-lightbox-section">
+              <span className="strategy-lightbox-label">Why this strategy matters</span>
+              <p>{selectedStrategyEntry.explanation || selectedStrategy.description}</p>
+            </div>
+
+            {selectedStrategyEntry.provenance?.length > 0 && (
+              <div className="strategy-lightbox-section">
+                <span className="strategy-lightbox-label">Reddit provenance</span>
+                <ul className="strategy-lightbox-list">
+                  {selectedStrategyEntry.provenance.map((reference) => (
+                    <li key={`${reference.label}-${reference.url}`}>
+                      <a href={reference.url} target="_blank" rel="noreferrer noopener">{reference.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeChampionAnalysis && (
+        <div className="strategy-lightbox" onClick={() => setActiveChampionAnalysis(null)}>
+          <div
+            className="strategy-lightbox-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="champion-analysis-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="strategy-lightbox-head">
+              <div>
+                <div className="eyebrow">
+                  {activeChampionAnalysis.strategyName || (activeChampionAnalysis.analysisType?.includes("ban") ? "Ban impact" : "Champion capability analysis")}
+                </div>
+                <h3 id="champion-analysis-title">{activeChampionAnalysis.championName}</h3>
+              </div>
+              <button
+                type="button"
+                className="checkout-close"
+                onClick={() => setActiveChampionAnalysis(null)}
+                aria-label="Close champion analysis"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="strategy-lightbox-section">
+              <span className="strategy-lightbox-label">
+                {activeChampionAnalysis.analysisType?.includes("ban") ? "Removed capability pressure" : "Key contributions"}
+              </span>
+              <div className="paid-feature-items lightbox-analysis-list">
+                {activeChampionAnalysis.contributions?.map(({ label, value, summary, explanation, provenance = [] }) => (
+                  <div key={label} className="paid-feature-item-wrap">
+                    <span className="paid-feature-item">
+                      <span>{label}</span>
+                      <em>{typeof value === "number" ? `${value}/4` : value}</em>
+                    </span>
+                    {summary && <small className="paid-feature-summary">{summary}</small>}
+                    {explanation && <small className="paid-feature-explanation">{explanation}</small>}
+                    {provenance.length > 0 && (
+                      <span className="paid-feature-provenance">
+                        {provenance.map((reference) => (
+                          <a key={`${reference.label}-${reference.url}`} href={reference.url} target="_blank" rel="noreferrer noopener">
+                            {reference.label}
+                          </a>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

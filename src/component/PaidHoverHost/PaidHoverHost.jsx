@@ -2,26 +2,9 @@ import React, { useEffect, useRef } from "react";
 import { HERMOD_UI_CONFIG } from "../../config.jsx";
 import PaidHoverCard from "../PaidHoverCard/PaidHoverCard.jsx";
 
-function PaidHoverHost({ id, children, card, activePaidHoverId, setActivePaidHoverId, className = "" }) {
+function PaidHoverHost({ id, children, card, activePaidHoverId, setActivePaidHoverId, className = "", onClickOpen }) {
   const closeTimerRef = useRef(null);
   const isOpen = activePaidHoverId === id;
-
-  const open = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-    }
-    setActivePaidHoverId(id);
-  };
-
-  const scheduleClose = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-    }
-
-    closeTimerRef.current = setTimeout(() => {
-      setActivePaidHoverId((current) => (current === id ? null : current));
-    }, Math.max(0, Number(HERMOD_UI_CONFIG.paidTooltipCloseDelayMs) || 0));
-  };
 
   useEffect(() => {
     return () => {
@@ -33,10 +16,17 @@ function PaidHoverHost({ id, children, card, activePaidHoverId, setActivePaidHov
     <span
       className={`paid-hover-host ${className}`}
       tabIndex={0}
-      onMouseEnter={open}
-      onMouseLeave={scheduleClose}
-      onFocus={open}
-      onBlur={scheduleClose}
+      onClick={() => {
+        if (onClickOpen) {
+          onClickOpen();
+        }
+      }}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && onClickOpen) {
+          event.preventDefault();
+          onClickOpen();
+        }
+      }}
     >
       {children}
       {isOpen && card}

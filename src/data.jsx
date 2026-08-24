@@ -41,7 +41,6 @@ export const FAMILIES = [
       { id: "protect", name: "Protect Hypercarry", description: "Concentrate resources around one scaling damage source and preserve its output.", requirements: ["protect_position", "protect_peel", "protect_recover", "scale_safe", "scale_convert"] },
       { id: "zone", name: "Zone-Control Teamfight", description: "Shape where the fight can happen and punish entry into prepared space.", requirements: ["space_deny", "space_hold", "space_force", "fight_follow"] },
       { id: "poke", name: "Poke & Disengage", description: "Create health and position advantages before hard commitment.", requirements: ["poke_pressure", "space_force", "protect_position", "protect_peel"] },
-      { id: "split", name: "Split Pressure", description: "Force the opponent to divide and convert side pressure into cross-map gain.", requirements: ["split_threat", "split_escape", "scale_safe", "scale_close"] },
     ],
   },
   {
@@ -54,6 +53,7 @@ export const FAMILIES = [
   {
     name: "Pressure strategies",
     strategies: [
+      { id: "split", name: "Split Pressure", description: "Force the opponent to divide and convert side pressure into cross-map gain.", requirements: ["split_threat", "split_escape", "scale_safe", "scale_close"] },
       { id: "pressure_pick", name: "Pressure into Pick", description: "Use space pressure to force movement, then punish the exposed transition.", requirements: ["space_deny", "space_force", "pick_find", "pick_finish"] },
     ],
   },

@@ -1,7 +1,7 @@
 import React from "react";
 import { HERMOD_PROVIDER_PAID_HOVER } from "../../config.jsx";
 
-function PaidHoverCard({ kind, championName, strategyName = "", contributions = [], onOpenCheckout }) {
+function PaidHoverCard({ kind, championName, strategyName = "", contributions = [], onOpenCheckout, onOpenFullAnalysis }) {
   const contentByKind = {
     current: HERMOD_PROVIDER_PAID_HOVER.currentProvider,
     preview: HERMOD_PROVIDER_PAID_HOVER.previewProvider,
@@ -25,9 +25,11 @@ function PaidHoverCard({ kind, championName, strategyName = "", contributions = 
           <span className="paid-feature-list-label">Key contributions</span>
           <span className="paid-feature-items">
             {visibleContributions.map(({ label, value }) => (
-              <span key={label} className="paid-feature-item">
-                <span>{label}</span>
-                <em>{typeof value === "number" ? `${value}/4` : value}</em>
+              <span key={label} className="paid-feature-item-wrap compact">
+                <span className="paid-feature-item">
+                  <span>{label}</span>
+                  <em>{typeof value === "number" ? `${value}/4` : value}</em>
+                </span>
               </span>
             ))}
           </span>
@@ -40,7 +42,11 @@ function PaidHoverCard({ kind, championName, strategyName = "", contributions = 
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          onOpenCheckout({ kind, championName, strategyName });
+          if (onOpenFullAnalysis) {
+            onOpenFullAnalysis({ kind, championName, strategyName, contributions });
+            return;
+          }
+          onOpenCheckout?.({ kind, championName, strategyName });
         }}
       >
         {HERMOD_PROVIDER_PAID_HOVER.buttonText}
