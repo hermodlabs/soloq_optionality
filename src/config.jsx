@@ -4,8 +4,8 @@ export const HERMOD_UI_CONFIG = {
 
 export const HERMOD_CHECKOUT_MODAL = {
   eyebrow: "Unlock paid analysis",
-  title: "Strategic capability analysis",
-  featureName: "Champion capability analysis",
+  title: "Adversarial analysis",
+  featureName: "Adversarial analysis",
   price: "$9.99",
   buttonText: "Unlock analysis",
   demoNote: "Demo checkout only. No payment will be processed.",
@@ -65,9 +65,13 @@ export const HERMOD_HELP = {
     title: "Strategic Lens",
     description: "A way of reading the same draft through one strategic question. Changing the lens changes the interpretation, not the champions.",
   },
-  objective_coverage: {
-    title: "Objective Coverage",
-    description: "Shows which strategic requirements the current team already satisfies.",
+  strategic_coverage: {
+    title: "Strategic Coverage",
+    description: "Shows which strategic archetypes and pathways the current team can structurally support.",
+  },
+  adversarial_fit: {
+    title: "Adversarial Fit",
+    description: "Opponent, patch, and game-state context modulate the effective strength of every lens by changing how the plan is actually tested.",
   },
   realizability: {
     title: "Realizability",
@@ -103,8 +107,8 @@ export const HERMOD_HELP = {
   closed: { title: "Closed", description: "The model no longer sees a remaining route to satisfy one or more requirements." },
 
   strategy_coverage_space: {
-    title: "Strategy Coverage Space",
-    description: "The collection of named strategies viewed through Objective Coverage.",
+    title: "Strategic Coverage Space",
+    description: "The collection of named strategies viewed through Strategic Coverage.",
   },
   strategy_realizability_space: {
     title: "Strategy Realizability Space",
@@ -123,22 +127,26 @@ export const HERMOD_HELP = {
     description: "The portion of the strategy space concerned with recognizable team-composition architectures.",
   },
 
-  composition_strategies: {
-    title: "Composition Strategies",
-    description: "Named strategies describing the overall architecture of how several champions work together.",
+  teamfight: {
+    title: "Teamfight",
+    description: "The family of compositions that answer the question: how are we structuring the decisive 5v5 battle?",
   },
-  access_catch_strategies: {
-    title: "Access / Catch Strategies",
-    description: "Strategies centered on reaching, isolating, or collapsing onto important enemy targets.",
+  pick_catch: {
+    title: "Pick / Catch",
+    description: "The family focused on isolating and collapsing a vulnerable enemy target before the full fight can form.",
   },
-  pressure_strategies: {
-    title: "Pressure Strategies",
-    description: "Strategies that create movement, space, or map pressure and convert the opponent's response.",
+  range_control: {
+    title: "Range Control",
+    description: "The family that wins by maintaining distance, imposing attrition, and making enemy commitment unfavorable.",
+  },
+  distributed_pressure: {
+    title: "Distributed Pressure",
+    description: "The family that creates side-lane or cross-map pressure and converts enemy division into leverage.",
   },
 
   front: {
-    title: "Front-to-Back Teamfight",
-    description: "A teamfight architecture that establishes a stable battle line, protects sustained damage, and works through enemy frontline.",
+    title: "Front-to-Back",
+    description: "A teamfight archetype that establishes a stable battle line, protects sustained damage, and converts through frontline control.",
     explanation: "Front-to-back teamfight is a control-and-conversion strategy: it wants to win the opening exchange, protect the damage core, maintain follow-through, and then convert that stable layout into sustained pressure. The model ties this strategy to Start favorable fight, Safe positioning, Peel & disrupt, Maintain follow-through, and Convert opening because the true goal is not a single burst window but a durable frontline that keeps the carry alive long enough to turn the fight into an attrition contest. In Reddit terms, the common thread is that the comp must survive the first contact and keep the backline functional, otherwise the fight collapses before the team reaches the late-game value it was trying to create.",
     provenance: [
       { label: "r/leagueoflegends — teamfight structures and frontline/backline spacing", url: "https://www.reddit.com/r/leagueoflegends/search/?q=front%20to%20back%20teamfight" },
@@ -147,8 +155,8 @@ export const HERMOD_HELP = {
     ],
   },
   protect: {
-    title: "Protect Hypercarry",
-    description: "A composition that concentrates protection, peel, and resources around a high-value scaling damage source.",
+    title: "Protect-the-Carry",
+    description: "A teamfight archetype that concentrates protection, peel, and resources around a high-value scaling damage source.",
     explanation: "Protect Hypercarry is built around preserving the conditions under which one carry can become dominant. The requirements behind it are Safe positioning, Peel & disrupt, Recovery & sustain, and Safe scaling, which together keep the carry in a useful lane and alive long enough to convert a small lead into a full late-game advantage. The strategy is not just about defending a single champion; it is about giving that champion enough safety, tempo, and follow-up room so they can convert value without being punished for playing on their own terms. Reddit discussion usually frames this as a carry-protection problem: if the damage source cannot stay in position and survive the first exchange, the entire comp loses its point.",
     provenance: [
       { label: "r/leagueoflegends — protecting carries in late-game teamfights", url: "https://www.reddit.com/r/leagueoflegends/search/?q=protect%20hypercarry%20league%20of%20legends" },
@@ -157,8 +165,8 @@ export const HERMOD_HELP = {
     ],
   },
   zone: {
-    title: "Zone-Control Teamfight",
-    description: "A composition that shapes where opponents can safely move or fight.",
+    title: "Dive / Backline Access",
+    description: "A teamfight archetype built to reach and punish the enemy backline before they can stabilize.",
     explanation: "Zone-Control Teamfight works by making the enemy answer to your geometry rather than their preferred angle. The key requirements are Deny enemy movement, Hold key areas, Force repositioning, and Maintain follow-through, because the strategy only becomes meaningful when the team can deny lanes, choke the map, and punish the forced decision that follows. The Reddit logic behind this strategy is consistent: if the enemy can choose comfortable space, the fight becomes a contest of skill and timing; if the team can deny that comfort, the fight becomes a contest of the map and bad decisions.",
     provenance: [
       { label: "r/leagueoflegends — zone control and fight geometry discussions", url: "https://www.reddit.com/r/leagueoflegends/search/?q=zone%20control%20teamfight" },
@@ -167,8 +175,8 @@ export const HERMOD_HELP = {
     ],
   },
   poke: {
-    title: "Poke & Disengage",
-    description: "A composition that creates health or position advantages from range and avoids unfavorable hard commitment.",
+    title: "Wombo / AoE Teamfight",
+    description: "A teamfight archetype that coordinates AoE control, burst, and initiation into synchronized fight windows.",
     explanation: "Poke & Disengage is an attrition strategy designed to win the fight before the enemy can fully commit. It depends on Apply ranged attrition, Force repositioning, Safe positioning, and Peel & disrupt so the team can chip away at the opponent while preserving its own spacing and safety. The real point of the plan is to turn each exchange into a resource problem for the enemy: if they must answer your range and your reposition, they lose tempo and the fight becomes a choice between bad trades and bad geometry. The Reddit discussion around poke comps is very consistent on this point: the comp is not trying to out-duel at point-blank range, it is trying to force a worse trade and then survive to repeat it.",
     provenance: [
       { label: "r/leagueoflegends — poke comps, disengage, and range advantages", url: "https://www.reddit.com/r/leagueoflegends/search/?q=poke%20and%20disengage%20league%20of%20legends" },
@@ -177,8 +185,8 @@ export const HERMOD_HELP = {
     ],
   },
   split: {
-    title: "Split Pressure",
-    description: "A composition that creates side-lane threats to divide the opponent and convert that response into cross-map opportunities.",
+    title: "Split-Push",
+    description: "A distributed-pressure archetype that creates side-lane threats to divide the opponent and convert that response into cross-map opportunities.",
     explanation: "Split Pressure is a map-and-attention strategy: it creates a side-lane threat, survives the counter-response, and then converts the enemy's forced division into objective and tempo advantage. The specific requirements behind it are Create side-lane threat, Survive side-lane pressure, Safe scaling, and Close fight / game, which capture the fact that the idea only works if the team can create pressure without immediately collapsing and then use that pressure to force an answer the opponent does not want. The Reddit framing is consistent: a split comp is not just a lane threat, it is a way to make the enemy solve an extra problem, and once that problem is created, the team gains time, space, and positional leverage.",
     provenance: [
       { label: "r/leagueoflegends — split pressure and side-lane map control", url: "https://www.reddit.com/r/leagueoflegends/search/?q=split%20pressure%20league%20of%20legends" },
@@ -207,8 +215,8 @@ export const HERMOD_HELP = {
     ],
   },
   pressure_pick: {
-    title: "Pressure into Pick",
-    description: "A strategy that uses space or movement pressure to force an exposed transition and punish it.",
+    title: "Poke-Siege",
+    description: "A range-control archetype that uses space and ranged pressure to force bad movement and punish unfavorable commitments.",
     explanation: "Pressure into Pick turns map pressure into a target problem. The team first denies movement, forces the enemy to reposition, finds the exposed target, and then finishes before they can recover. The central requirements are Deny enemy movement, Force repositioning, Find target, and Finish target, which captures the exact sequence behind the strategy: create a bad movement choice, turn that into a vulnerable target, and convert the pressure into a decisive window. Reddit discussion usually treats this as a forced-rotation plan rather than a burst plan, because the whole point is to make the enemy answer to your pressure before they are ready to fight on their own terms.",
     provenance: [
       { label: "r/leagueoflegends — pressure into pick and forced rotation ideas", url: "https://www.reddit.com/r/leagueoflegends/search/?q=pressure%20into%20pick%20league%20of%20legends" },

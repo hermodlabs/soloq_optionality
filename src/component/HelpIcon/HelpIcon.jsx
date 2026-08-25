@@ -15,18 +15,26 @@ function HelpIcon({ helpKey, label }) {
       onFocus={() => setOpen(true)}
       onBlur={() => setOpen(false)}
     >
-      <button
-        type="button"
+      <span
         className={`info-icon ${open ? "active" : ""}`}
+        role="button"
+        tabIndex={0}
         aria-label={`About ${label || entry.title}`}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
           setOpen((value) => !value);
         }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen((value) => !value);
+          }
+        }}
       >
         ⓘ
-      </button>
+      </span>
 
       {open && (
         <span className="help-popover local" role="tooltip">

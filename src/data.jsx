@@ -35,26 +35,30 @@ export const REQUIREMENTS = {
 
 export const FAMILIES = [
   {
-    name: "Composition strategies",
+    name: "Teamfight",
     strategies: [
-      { id: "front", name: "Front-to-Back Teamfight", description: "Establish a stable battle line, absorb contact, then convert through sustained damage.", requirements: ["fight_start", "fight_follow", "protect_position", "protect_peel", "scale_convert"] },
-      { id: "protect", name: "Protect Hypercarry", description: "Concentrate resources around one scaling damage source and preserve its output.", requirements: ["protect_position", "protect_peel", "protect_recover", "scale_safe", "scale_convert"] },
-      { id: "zone", name: "Zone-Control Teamfight", description: "Shape where the fight can happen and punish entry into prepared space.", requirements: ["space_deny", "space_hold", "space_force", "fight_follow"] },
-      { id: "poke", name: "Poke & Disengage", description: "Create health and position advantages before hard commitment.", requirements: ["poke_pressure", "space_force", "protect_position", "protect_peel"] },
+      { id: "front", name: "Front-to-Back", description: "Establish a stable battle line, absorb contact, then convert through sustained damage.", requirements: ["fight_start", "fight_follow", "protect_position", "protect_peel", "scale_convert"] },
+      { id: "protect", name: "Protect-the-Carry", description: "Concentrate resources around one scaling damage source and preserve its output.", requirements: ["protect_position", "protect_peel", "protect_recover", "scale_safe", "scale_convert"] },
+      { id: "zone", name: "Dive / Backline Access", description: "Reach and punish the enemy's vulnerable backline before they can stabilize.", requirements: ["fight_reach", "pick_find", "fight_follow", "space_force"] },
+      { id: "poke", name: "Wombo / AoE Teamfight", description: "Coordinate AoE control, burst, and initiation around synchronized fight windows.", requirements: ["fight_start", "space_force", "protect_peel", "scale_convert"] },
     ],
   },
   {
-    name: "Access / catch strategies",
+    name: "Pick / Catch",
     strategies: [
       { id: "pick", name: "Pick & Collapse", description: "Find an exposed target, isolate it, and finish before the enemy can stabilize.", requirements: ["pick_find", "pick_isolate", "pick_finish", "fight_reach"] },
-      { id: "engage", name: "Engage & Follow-through", description: "Create a reliable fight entry and maintain enough access to finish it.", requirements: ["fight_start", "fight_reach", "fight_follow"] },
     ],
   },
   {
-    name: "Pressure strategies",
+    name: "Range Control",
     strategies: [
-      { id: "split", name: "Split Pressure", description: "Force the opponent to divide and convert side pressure into cross-map gain.", requirements: ["split_threat", "split_escape", "scale_safe", "scale_close"] },
-      { id: "pressure_pick", name: "Pressure into Pick", description: "Use space pressure to force movement, then punish the exposed transition.", requirements: ["space_deny", "space_force", "pick_find", "pick_finish"] },
+      { id: "pressure_pick", name: "Poke-Siege", description: "Create range and space advantages without committing to an unfavorable hard fight.", requirements: ["poke_pressure", "space_force", "protect_position", "protect_peel"] },
+    ],
+  },
+  {
+    name: "Distributed Pressure",
+    strategies: [
+      { id: "split", name: "Split-Push", description: "Force the opponent to divide attention and convert that response into cross-map gain.", requirements: ["split_threat", "split_escape", "scale_safe", "scale_close"] },
     ],
   },
 ];

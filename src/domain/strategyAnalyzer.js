@@ -120,7 +120,7 @@ export function getStrategyInfo({ strategy, side, state, phase, phasePicks, cham
 export function getLensInfo({ strategy, side, state, lens, phase, phasePicks, champions, championMap }) {
   const info = getStrategyInfo({ strategy, side, state, phase, phasePicks, champions, championMap });
 
-  if (lens === "objective") {
+  if (lens === "strategic") {
     return {
       main: `${info.current.length}/${strategy.requirements.length}`,
       label: "requirements covered",
@@ -175,9 +175,9 @@ export function getStrategyDiff({ strategy, analysisSide, preview, lens, draft, 
   const before = getStrategyInfo({ strategy, side: analysisSide, state: beforeState, phase, phasePicks, champions, championMap });
   const after = getStrategyInfo({ strategy, side: analysisSide, state: afterState, phase, phasePicks, champions, championMap });
 
-  if (lens === "objective") {
+  if (lens === "strategic") {
     if (before.current.length === after.current.length) {
-      return { text: "No coverage change", className: "same" };
+      return { text: "No strategic coverage change", className: "same" };
     }
 
     return {
@@ -226,7 +226,7 @@ export function getMetricCards({ allStrategies, lens, analysisSide = "blue", bef
     getStrategyInfo({ strategy, side: analysisSide, state: afterState, phase, phasePicks, champions, championMap })
   );
 
-  if (lens === "objective") {
+  if (lens === "strategic" || lens === "objective") {
     const average = (items) =>
       Math.round(
         items.reduce(
@@ -276,7 +276,7 @@ export function getMetricCards({ allStrategies, lens, analysisSide = "blue", bef
 export function getRequirementState({ requirementId, state, analysisSide, lens, phase, phasePicks, champions, championMap }) {
   const currentProviders = getProvidersFor({ requirementId, side: analysisSide, state, phase, phasePicks, championMap });
 
-  if (lens === "objective") {
+  if (lens === "strategic" || lens === "objective") {
     return {
       label: currentProviders.length ? "COVERED" : "GAP",
       className: currentProviders.length ? "good" : "bad",
@@ -353,9 +353,14 @@ export function filterChampions({ champions, search, roleFilter }) {
 
 export function getLensSpace(lens) {
   return {
+    strategic: [
+      "Strategic Coverage Space",
+      "Which strategic archetypes and pathways are currently supported?",
+      "strategy_coverage_space",
+    ],
     objective: [
-      "Strategy Coverage Space",
-      "How much of each named strategy is currently supported?",
+      "Strategic Coverage Space",
+      "Which strategic archetypes and pathways are currently supported?",
       "strategy_coverage_space",
     ],
     realizability: [

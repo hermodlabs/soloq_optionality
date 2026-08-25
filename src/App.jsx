@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Network } from "vis-network/peer";
 import { CHAMPION_CAPABILITY_GUIDANCE, HERMOD_HELP } from "./config.jsx";
 import { FAMILIES, PHASES, REQUIREMENTS } from "./data.jsx";
 import { draftController } from "./domain/draftController.js";
@@ -26,6 +27,54 @@ import PaidHoverHost from "./component/PaidHoverHost/PaidHoverHost.jsx";
 import CheckoutModal from "./component/CheckoutModal/CheckoutModal.jsx";
 
 const ROLE_FILTERS = ["All", "Tank", "Fighter", "Assassin", "Mage", "Marksman", "Support"];
+
+function ConditionNetworkGraph({ conditions, championMap, onChampionClick }) {
+  return (
+    <div className="condition-table-wrap">
+      <table className="condition-table">
+        <thead>
+          <tr>
+            <th>Condition</th>
+            <th>Champion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {conditions.map((condition) => (
+            <tr key={condition.id || condition.label}>
+              <td className="condition-cell">
+                <div className="condition-cell-content">
+                  <strong>{condition.label}</strong>
+                  <span>{condition.text || condition.label}</span>
+                </div>
+              </td>
+              <td className="condition-provider-cell">
+                <div className="condition-provider-list">
+                  {(condition.providers || []).map((championId) => {
+                    const champion = championMap.get(championId);
+                    if (!champion) return null;
+
+                    return (
+                      <button
+                        key={`${condition.id}-${championId}`}
+                        type="button"
+                        className="condition-provider-pill"
+                        onClick={() => onChampionClick(champion)}
+                        title={champion.name}
+                      >
+                        <img src={champion.image} alt={champion.name} />
+                        <span>{champion.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function App() {
   const {
@@ -86,7 +135,7 @@ function App() {
 
   const phase = draftController.getCurrentPhase(phaseIndex);
   const selectedStrategy =
-    allStrategies.find((strategy) => strategy.id === selectedStrategyId) || allStrategies[0];
+    allStrategies.find((strategy) => strategy.id === selectedStrategyId) || allStrategies[0] || null;
 
   const usedSet = useMemo(
     () => new Set([...draft.blue, ...draft.red]),
@@ -197,7 +246,7 @@ function App() {
 
   const beforeState = getAnalysisState(false);
   const afterState = getAnalysisState(true);
-  const selectedLensInfo = getLensInfo(selectedStrategy, analysisSide, beforeState);
+  const selectedLensInfo = selectedStrategy ? getLensInfo(selectedStrategy, analysisSide, beforeState) : null;
 
   const metricCards = computeMetricCards({
     allStrategies,
@@ -227,7 +276,257 @@ function App() {
   const [activeStrategyDetail, setActiveStrategyDetail] = useState(null);
   const [activeChampionAnalysis, setActiveChampionAnalysis] = useState(null);
 
-  const selectedStrategyEntry = HERMOD_HELP[selectedStrategy.id] || {};
+  const selectedStrategyEntry = selectedStrategy ? HERMOD_HELP[selectedStrategy.id] || {} : {};
+
+  const adversarialSignals = useMemo(() => {
+    if (!selectedStrategy) return [];
+    const strategyId = selectedStrategy.id;
+
+    const byStrategy = {
+      front: [
+        {
+          label: "Enemy backline access",
+          text: "The enemy can contest the carry if the fight does not start on your terms and your frontline cannot hold the first exchange.",
+        },
+        {
+          label: "Damage conversion pressure",
+          text: "Your sustained damage wins only if the compensation cycle remains intact; the first lost exchange can collapse the plan.",
+        },
+        {
+          label: "Primary vulnerability",
+          text: "The carry is still the clearest pressure point, so a single failed peel turn can erase the whole sequence.",
+        },
+      ],
+      protect: [
+        {
+          label: "Enemy dive pressure",
+          text: "The plan fails quickly if the opponent can reach your carry before the team has stacked peel or vision control.",
+        },
+        {
+          label: "Sustain mismatch",
+          text: "If your sustain does not outlast the enemy's burst, the carry is no longer safe enough to convert the lead.",
+        },
+        {
+          label: "Single dependency",
+          text: "This strategy is still very dependent on one damage source staying alive long enough to turn the fight.",
+        },
+      ],
+      zone: [
+        {
+          label: "Reroute pressure",
+          text: "Enemy movement and pick timing can invalidate your preferred fight geometry before you ever get to the key lane.",
+        },
+        {
+          label: "Backline disruption",
+          text: "If the enemy reaches your vulnerable targets early, your control plan loses the initiative and turns into an attrition fight.",
+        },
+        {
+          label: "Flexibility risk",
+          text: "This plan is most dangerous when the enemy has no clean answer; once they force the fight elsewhere, your geometry weakens.",
+        },
+      ],
+      poke: [
+        {
+          label: "Range denial",
+          text: "Enemy disengage can stop your ranged pressure before the fight has even become an exchange of real value.",
+        },
+        {
+          label: "Position loss",
+          text: "Once you are forced to commit, the stronger side benefits from the range trap and your value window can disappear.",
+        },
+        {
+          label: "Counter-commit risk",
+          text: "You are structurally strong while preserving distance, but the plan becomes brittle if the enemy can choose the fight on their terms.",
+        },
+      ],
+      pick: [
+        {
+          label: "Vision pressure",
+          text: "If the enemy can see the approach or peel your objective target, the opening collapses before the pick arrives.",
+        },
+        {
+          label: "Target denial",
+          text: "The plan is only as good as the target selection window; if the enemy rotates early, you lose the timing advantage.",
+        },
+        {
+          label: "Collapse fragility",
+          text: "A single failed engage or failed follow-through can turn a nice pick into a losing 5v5.",
+        },
+      ],
+      split: [
+        {
+          label: "Side-lane counterplay",
+          text: "The enemy can deny your split lane before it becomes a real map threat, then punish your weak side of the map.",
+        },
+        {
+          label: "Response pressure",
+          text: "A clean response collapse can cut off the whole lane before your side pressure becomes meaningful.",
+        },
+        {
+          label: "Map tempo risk",
+          text: "This plan is only healthy if the objective timing stays favorable; if they can answer the split without overcommitting, your leverage drops quickly.",
+        },
+      ],
+      pressure_pick: [
+        {
+          label: "Movement denial",
+          text: "Your plan depends on the enemy making bad movement choices; if they accept the trade, the pressure becomes static and fragile.",
+        },
+        {
+          label: "Trade pressure",
+          text: "The window is strongest only if you can convert the forced reposition into a real target problem before the fight resets.",
+        },
+        {
+          label: "Counter-rotation risk",
+          text: "The opponent can absorb the pressure and then exploit the reduced team positioning once the fight is forced.",
+        },
+      ],
+    };
+
+    return byStrategy[strategyId] || [
+      {
+        label: "Opponent pressure detected",
+        text: "The enemy will try to remove the conditions that make this plan work before it becomes a real advantage.",
+      },
+      {
+        label: "Execution stress",
+        text: "The plan is structurally viable, but it still carries dependency risk if the opponent can remove the required timing window.",
+      },
+      {
+        label: "Recovery path",
+        text: "This strategy remains viable if the team can answer the enemy's first disruption with a faster second wave or a cleaner pivot.",
+      },
+    ];
+  }, [selectedStrategy]);
+
+  const draftMetaModel = useMemo(() => {
+    if (!selectedStrategy) {
+      return {
+        strategy: "",
+        description: "",
+        pathways: [],
+        capabilities: [],
+        conditions: [],
+        exposures: [],
+      };
+    }
+
+    const entries = selectedStrategy.requirements.map((requirementId) => {
+      const state = requirementState(requirementId, beforeState);
+      const currentProviders = providersFor(requirementId, analysisSide, beforeState);
+      const label = REQUIREMENTS[requirementId] || requirementId.replace(/_/g, " ");
+      return {
+        id: requirementId,
+        label,
+        strength: state.label,
+        providerCount: currentProviders.length,
+        description: HERMOD_HELP[requirementId]?.description || "This is a meaningful requirement in the current draft structure.",
+      };
+    });
+
+    const capabilities = [...entries]
+      .sort((left, right) => {
+        const order = { Strong: 3, Medium: 2, Low: 1, Gap: 0 };
+        return (order[right.strength] || 0) - (order[left.strength] || 0);
+      })
+      .slice(0, 4);
+
+    const pathways = [
+      entries.slice(0, 3).map((entry) => entry.label).join(" → "),
+      entries.slice(1, 4).map((entry) => entry.label).join(" → "),
+    ].filter((path) => path && path.split(" → ").length > 1);
+
+    const conditions = entries
+      .filter((entry) => entry.providerCount > 0)
+      .slice(0, 3)
+      .map((entry) => {
+        const providerIds = providersFor(entry.id, analysisSide, beforeState);
+        const providerNames = providerIds
+          .map((championId) => championMap.get(championId)?.name || championId)
+          .slice(0, 3);
+
+        const text = providerNames.length > 0
+          ? `${entry.label} is currently supported by ${providerNames.join(", ")}.`
+          : `${entry.label} is currently supported by its current draft pattern.`;
+
+        return {
+          id: entry.id,
+          label: entry.label,
+          text,
+          providers: providerIds,
+        };
+      });
+
+    const exposures = entries
+      .filter((entry) => entry.providerCount === 0)
+      .slice(0, 3)
+      .map((entry) => `${entry.label} is still a structural exposure for this plan.`);
+
+    return {
+      strategy: selectedStrategy.name,
+      description: selectedStrategy.description,
+      pathways: pathways.length > 0 ? pathways : [selectedStrategy.name],
+      capabilities,
+      conditions: conditions.length > 0 ? conditions : [{ id: "none", label: "No clear condition", text: "This draft has no clear provider pattern yet." }],
+      exposures,
+    };
+  }, [selectedStrategy, beforeState, analysisSide, providersFor, requirementState, championMap]);
+
+  const pathwayGraph = useMemo(() => {
+    if (!selectedStrategy) return { nodes: [], edges: [] };
+
+    const nodes = selectedStrategy.requirements.map((requirementId, index) => {
+      const label = REQUIREMENTS[requirementId] || requirementId.replace(/_/g, " ");
+      const isLeft = index % 2 === 0;
+      return {
+        id: requirementId,
+        label,
+        x: isLeft ? 110 : 360,
+        y: 40 + (index * 42),
+      };
+    });
+
+    const edges = [];
+    for (let index = 0; index < nodes.length - 1; index += 1) {
+      edges.push({
+        from: nodes[index].id,
+        to: nodes[index + 1].id,
+      });
+    }
+
+    return { nodes, edges };
+  }, [selectedStrategy?.requirements]);
+
+  const pathwayElements = useMemo(() => {
+    if (!selectedStrategy) return [];
+
+    const unique = [];
+    const seen = new Set();
+
+    draftMetaModel.pathways.forEach((path) => {
+      path.split(" → ").forEach((step) => {
+        const requirementId = selectedStrategy.requirements.find(
+          (id) => (REQUIREMENTS[id] || id.replace(/_/g, " ")) === step
+        );
+
+        if (!requirementId || seen.has(requirementId)) return;
+
+        const currentProviders = providersFor(requirementId, analysisSide, beforeState);
+        const afterProviders = providersFor(requirementId, analysisSide, afterState);
+        const providerIds = [...new Set([...currentProviders, ...afterProviders])];
+        const requirementDetail = HERMOD_HELP[requirementId] || {};
+        seen.add(requirementId);
+        unique.push({
+          id: requirementId,
+          label: step,
+          summary: requirementDetail.description || "This requirement is part of the current pathway structure.",
+          providers: providerIds,
+        });
+      });
+    });
+
+    return unique;
+  }, [draftMetaModel.pathways, selectedStrategy?.requirements, providersFor, beforeState, afterState, analysisSide]);
 
   const openChampionAnalysis = ({ champion, kind, strategyName = "" }) => {
     if (!champion) return;
@@ -395,7 +694,7 @@ function App() {
           <div className="eyebrow">Hermod · SoloQ Optionality Lab</div>
           <h1>Move one piece. See what the strategic space becomes.</h1>
           <p className="sub">
-            This prototype is an exploration tool, not a “best pick” recommender. Click any available champion to stage a Jenga-piece preview, inspect the diff, then explicitly commit it.
+            Free mode explains the current draft. Paid mode compares alternative draft worlds and the delta reasoning between them.
           </p>
         </div>
 
@@ -551,7 +850,7 @@ function App() {
 
         <div className="lenses">
           {[
-            ["objective", "Objective Coverage", "What strategic requirements are currently covered?", "objective_coverage"],
+            ["strategic", "Strategic Coverage", "Which strategic archetypes and pathways does this composition support?", "strategic_coverage"],
             ["realizability", "Realizability", "How executable are the covered requirements?", "realizability"],
             ["robustness", "Robustness", "Where is support redundant or concentrated?", "robustness"],
             ["optionality", "Optionality", "What named strategies and requirements remain open?", "optionality"],
@@ -701,9 +1000,10 @@ function App() {
 
             {FAMILIES.map((family) => {
               const familyHelpKey = {
-                "Composition strategies": "composition_strategies",
-                "Access / catch strategies": "access_catch_strategies",
-                "Pressure strategies": "pressure_strategies",
+                "Teamfight": "teamfight",
+                "Pick / Catch": "pick_catch",
+                "Range Control": "range_control",
+                "Distributed Pressure": "distributed_pressure",
               }[family.name];
 
               return (
@@ -750,164 +1050,234 @@ function App() {
               );
             })}
           </section>
+
+          {selectedStrategy && (
+            <section className="panel adversarial-analysis-panel">
+              <div className="analysis-panel-header">
+                <div className="eyebrow">Adversarial analysis</div>
+                <h3>How the enemy can contest this plan</h3>
+              </div>
+
+              <div className="adversarial-pro-box">
+                <div className="summary-pill paid">Pro</div>
+                <p>
+                  Opponent pressure is likely to target the conditions that make {selectedStrategy.name.toLowerCase()} work. This deeper read explains how the enemy contests your plan: which capability, pathway, and champion dependency they are attacking, which counter-paths remain viable, and which replacement picks restore the matchup.
+                </p>
+                <button
+                  type="button"
+                  className="adversarial-unlock-button"
+                  onClick={() => setCheckoutContext(paidFeatureController.createCheckoutContext({
+                    kind: "adversarial",
+                    strategyName: selectedStrategy.name,
+                  }))}
+                >
+                  Unlock adversarial analysis
+                </button>
+              </div>
+
+              <ul className="adversarial-warning-list">
+                {adversarialSignals.map((signal) => (
+                  <li key={signal.label}>
+                    <strong>{signal.label}</strong>
+                    <span>{signal.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </main>
 
         <aside className="right">
-          <section className="panel">
-            <div className="detail-head">
-              <div>
-                <div className="eyebrow term-with-info">
-                  <HelpIcon helpKey="selected_named_strategy" label="Strategy requirements" />
-                  Strategy requirements
-                </div>
-                <h2
-                  className="strategy-detail-trigger"
-                  onClick={() => setActiveStrategyDetail(selectedStrategy.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      setActiveStrategyDetail(selectedStrategy.id);
-                    }
-                  }}
-                >
-                  {selectedStrategy.name}
-                </h2>
-                <p className="sub">{selectedStrategy.description}</p>
-              </div>
-
-              <span className={`status ${getStatusClass(selectedLensInfo.status)}`}>
-                {selectedLensInfo.status}
-              </span>
-            </div>
-
-            <div className="requirements">
-              {selectedStrategy.requirements.map((requirementId) => {
-                const currentProviders = providersFor(requirementId, analysisSide, beforeState);
-                const afterProviders = providersFor(requirementId, analysisSide, afterState);
-                const addedProviders = afterProviders.filter(
-                  (championId) => !currentProviders.includes(championId)
-                );
-                const state = requirementState(requirementId, beforeState);
-
-                let note = state.note;
-                let noteClass = "";
-
-                if (preview && addedProviders.length > 0) {
-                  note = `+ ${addedProviders
-                    .map((championId) => championMap.get(championId)?.name || championId)
-                    .join(", ")} becomes a provider`;
-                  noteClass = "add";
-                } else if (preview && phase?.type === "bans") {
-                  const champion = championMap.get(preview);
-                  if (champion && capabilityStrength(champion.id, requirementId) > 0) {
-                    note = `− banning ${champion.name} narrows this requirement's future pool`;
-                    noteClass = "remove";
-                  }
-                }
-
-                const requirementDetail = HERMOD_HELP[requirementId] || {};
-
-                return (
-                  <div
-                    key={requirementId}
-                    className="req"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setActiveRequirementDetail({
-                      title: REQUIREMENTS[requirementId],
-                      strategyName: selectedStrategy.name,
-                      body: getRequirementLightboxBody(requirementId, selectedStrategy.name, requirementDetail),
-                      explanation: requirementDetail.explanation || "This requirement contributes to the current named strategy.",
-                      provenance: requirementDetail.provenance || [],
-                      status: state.label,
-                    })}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setActiveRequirementDetail({
-                          title: REQUIREMENTS[requirementId],
-                          strategyName: selectedStrategy.name,
-                          body: getRequirementLightboxBody(requirementId, selectedStrategy.name, requirementDetail),
-                          explanation: requirementDetail.explanation || "This requirement contributes to the current named strategy.",
-                          provenance: requirementDetail.provenance || [],
-                          status: state.label,
-                        });
-                      }
-                    }}
-                  >
-                    <div className="req-top">
-                      <div className="req-name">{REQUIREMENTS[requirementId]}</div>
-                      <span className={`status ${state.className}`}>{state.label}</span>
+          {selectedStrategy ? (
+            <>
+              <section className="panel strategy-description-panel">
+                <div className="detail-head">
+                  <div>
+                    <div className="eyebrow term-with-info">
+                      <HelpIcon helpKey="selected_named_strategy" label="Selected strategy" />
+                      Selected strategy
                     </div>
-
-                    <div className="req-description">
-                      {requirementDetail.description || "This requirement contributes to the current named strategy."}
-                    </div>
-
-                    <div className="providers">
-                      {currentProviders.length > 0 ? (
-                        currentProviders.map((championId) => {
-                          const champion = championMap.get(championId);
-                          return (
-                            <PaidHoverHost
-                              key={championId}
-                              id={`provider-${requirementId}-${championId}`}
-                              activePaidHoverId={activePaidHoverId}
-                              setActivePaidHoverId={setActivePaidHoverId}
-                              card={
-                                <PaidHoverCard
-                                  kind="current"
-                                  championName={champion?.name || championId}
-                                  strategyName={selectedStrategy.name}
-                                  onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: "current" })}
-                                />
-                              }
-                            >
-                              <span className="provider">
-                                <img src={champion?.image} alt="" />
-                                {champion?.name || championId}
-                              </span>
-                            </PaidHoverHost>
-                          );
-                        })
-                      ) : (
-                        <span className="sub">No current providers</span>
-                      )}
-
-                      {addedProviders.map((championId) => {
-                        const champion = championMap.get(championId);
-                        return (
-                          <PaidHoverHost
-                            key={`preview-${championId}`}
-                            id={`provider-preview-${requirementId}-${championId}`}
-                            activePaidHoverId={activePaidHoverId}
-                            setActivePaidHoverId={setActivePaidHoverId}
-                            card={
-                              <PaidHoverCard
-                                kind="preview"
-                                championName={champion?.name || championId}
-                                strategyName={selectedStrategy.name}
-                                onOpenFullAnalysis={(payload) => setActiveChampionAnalysis({ ...payload, analysisType: "preview" })}
-                              />
-                            }
-                          >
-                            <span className="provider preview">
-                              <img src={champion?.image} alt="" />
-                              + {champion?.name || championId}
-                            </span>
-                          </PaidHoverHost>
-                        );
-                      })}
-                    </div>
-
-                    <div className={`req-diff ${noteClass}`}>{note}</div>
+                    <h2
+                      className="strategy-detail-trigger"
+                      onClick={() => setActiveStrategyDetail(selectedStrategy.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setActiveStrategyDetail(selectedStrategy.id);
+                        }
+                      }}
+                    >
+                      {selectedStrategy.name}
+                    </h2>
+                    <p className="sub">{selectedStrategy.description}</p>
                   </div>
-                );
-              })}
-            </div>
-          </section>
+
+                  <span className={`status ${getStatusClass(selectedLensInfo.status)}`}>
+                    {selectedLensInfo.status}
+                  </span>
+                </div>
+
+                <div className="adversarial-pro-box">
+                  <div className="summary-pill paid">Pro</div>
+                  <p>
+                    Hermod reads this draft as a {selectedStrategy.name.toLowerCase()} strategy. Unlock the counterplay layer to see how the opposing team should respond, which path becomes fragile, and which adjustment or replacement move restores your strategic sequence.
+                  </p>
+                  <button
+                    type="button"
+                    className="adversarial-unlock-button"
+                    onClick={() => setCheckoutContext(paidFeatureController.createCheckoutContext({
+                      kind: "adversarial",
+                      strategyName: selectedStrategy.name,
+                    }))}
+                  >
+                    Unlock adversarial analysis
+                  </button>
+                </div>
+
+                {selectedStrategyEntry.explanation && (
+                  <div className="strategy-summary-rationale">
+                    <div className="eyebrow">Why this strategy matters</div>
+                    <p>{selectedStrategyEntry.explanation}</p>
+                  </div>
+                )}
+              </section>
+
+              <section className="panel analysis-panel">
+                <div className="analysis-panel-header">
+                  <div className="eyebrow">Capabilities</div>
+                  <h3>Core strengths</h3>
+                </div>
+                <div className="capability-list expanded">
+                  {draftMetaModel.capabilities.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className="capability-pill"
+                      onClick={() => setActiveRequirementDetail({
+                        title: entry.label,
+                        strategyName: selectedStrategy.name,
+                        body: getRequirementLightboxBody(entry.id, selectedStrategy.name, HERMOD_HELP[entry.id] || {}),
+                        explanation: HERMOD_HELP[entry.id]?.explanation || "This requirement is a meaningful structural driver for the current draft.",
+                        provenance: HERMOD_HELP[entry.id]?.provenance || [],
+                        status: entry.strength,
+                      })}
+                    >
+                      <span>{entry.label}</span>
+                      <strong>{entry.strength}</strong>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="panel analysis-panel">
+                <div className="analysis-panel-header">
+                  <div className="eyebrow">Conditions</div>
+                  <h3>What the team needs to hold</h3>
+                </div>
+                <ConditionNetworkGraph
+                  conditions={draftMetaModel.conditions}
+                  championMap={championMap}
+                  onChampionClick={(champion) => openChampionAnalysis({ champion, kind: "pick", strategyName: selectedStrategy.name })}
+                />
+              </section>
+
+              <section className="panel analysis-panel">
+                <div className="analysis-panel-header">
+                  <div className="eyebrow">Exposures</div>
+                  <h3>Where the plan is vulnerable</h3>
+                </div>
+                <div className="exposure-card-grid">
+                  {draftMetaModel.exposures.map((exposure) => (
+                    <div key={exposure} className="exposure-card">
+                      <span className="exposure-card-badge">Exposure</span>
+                      <p>{exposure}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="panel analysis-panel">
+                <div className="analysis-panel-header">
+                  <div className="eyebrow">Pathways</div>
+                  <h3>How the draft converts</h3>
+                </div>
+                <div className={`pathway-ribbon ${draftMetaModel.pathways.length > 1 ? "multi" : "single"}`}>
+                  {draftMetaModel.pathways.map((path, pathIndex) => {
+                    const steps = path.split(" → ");
+                    return (
+                      <div key={`${path}-${pathIndex}`} className="pathway-column">
+                        <div className="pathway-track">
+                          {steps.map((step, index) => (
+                            <React.Fragment key={`${pathIndex}-${step}-${index}`}>
+                              <div className="pathway-step">
+                                <span>{step}</span>
+                              </div>
+                              {index < steps.length - 1 && (
+                                <div className="pathway-arrow" aria-hidden="true">→</div>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="panel analysis-panel">
+                <div className="analysis-panel-header">
+                  <div className="eyebrow">Pathway elements</div>
+                  <h3>Exact building blocks</h3>
+                </div>
+                <div className="pathway-element-grid">
+                  {pathwayElements.map((element) => (
+                    <button
+                      key={element.id}
+                      type="button"
+                      className="pathway-element-card"
+                      onClick={() => setActiveRequirementDetail({
+                        title: element.label,
+                        strategyName: selectedStrategy.name,
+                        body: getRequirementLightboxBody(element.id, selectedStrategy.name, HERMOD_HELP[element.id] || {}),
+                        explanation: HERMOD_HELP[element.id]?.explanation || "This requirement is part of the current pathway structure.",
+                        provenance: HERMOD_HELP[element.id]?.provenance || [],
+                        status: requirementState(element.id, beforeState).label,
+                      })}
+                    >
+                      <span className="pathway-element-name">{element.label}</span>
+                      <small>{element.summary}</small>
+                      <span className="pathway-element-providers">
+                        {element.providers.map((championId) => {
+                          const champion = championMap.get(championId);
+                          if (!champion) return null;
+                          return (
+                            <span key={`${element.id}-${championId}`} className="pathway-provider-avatar" title={champion.name}>
+                              <img src={champion.image} alt={champion.name} />
+                            </span>
+                          );
+                        })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+            </>
+          ) : (
+            <section className="panel strategy-description-panel">
+              <div className="detail-head">
+                <div>
+                  <div className="eyebrow">Selected strategy</div>
+                  <h2>Select a strategy</h2>
+                </div>
+              </div>
+              <div className="strategy-summary-block">
+                <p>No strategy details are loaded yet.</p>
+              </div>
+            </section>
+          )}
         </aside>
       </div>
 

@@ -22,7 +22,7 @@ export const useHermodStore = create((set, get) => ({
 
   draft: initialDraft,
 
-  lens: "objective",
+  lens: "strategic",
   analysisSide: "blue",
   selectedStrategyId: "front",
 
@@ -92,7 +92,7 @@ export const useHermodStore = create((set, get) => ({
       preview: null,
       activeBanSide: "blue",
       phasePicks: [],
-      lens: "objective",
+      lens: "strategic",
       analysisSide: "blue",
       selectedStrategyId: "front",
       activePaidHoverId: null,
